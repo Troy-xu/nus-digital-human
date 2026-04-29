@@ -77,14 +77,11 @@ git clone https://github.com/freecoinx/awesome-digital-human-live2d.git
 git clone https://github.com/<your-github>/nus-digital-human.git   # this repo
 ```
 
-### 3. Install agent into ADH backend (one-time)
+### 3. Install our agent + Whisper engine into ADH
 
-```bash
-cd /root/work
-cp -r nus-digital-human/agent_template adh_ai_agent   # or follow BUILD_LOG.md to set up by hand
-cd awesome-digital-human-live2d
-uv pip install -e ../adh_ai_agent
-```
+The canonical sources live in [`agent/`](agent/). Follow [agent/README.md](agent/README.md) for the full step-by-step (8 manual steps total: bootstrap an `adh_ai_agent` Python project, copy `nus_agent.py` into it, drop `whisperASR.py`/`whisperAPI.yaml` into ADH's engine directory, patch ADH's `__init__.py` and `config.yaml`, and `uv pip install -e ../adh_ai_agent`).
+
+Automating this with a single `bootstrap.sh` is on the [ROADMAP](ROADMAP.md). PRs welcome.
 
 ### 4. Set your tokens (every shell, or in your dotfiles)
 
@@ -112,7 +109,7 @@ Then open **http://localhost:3000/sentio** in an **incognito window** (so you ge
 
 ### 7. Ask away
 
-See [demo_questions.md](demo_questions.md) for a curated 5-tier question bank (easy retrieval → guard rails → reset commands).
+See [demo_questions.md](demo_questions.md) for a curated 7-tier question bank (easy retrieval → multi-turn → mixed language → guard rails → reset → voice edge cases) plus a 4-minute live-demo recipe.
 
 ---
 
@@ -120,13 +117,20 @@ See [demo_questions.md](demo_questions.md) for a curated 5-tier question bank (e
 
 ```
 nus-digital-human/
-├── README.md                 ← this file
-├── BUILD_LOG.md              ← full journal: pitfalls, decisions, performance numbers
-├── demo_questions.md         ← curated Q&A for live demos
-├── start_demo.cmd            ← Windows double-click launcher
+├── README.md                 ← this file (developer onboarding)
+├── PRODUCT_BRIEF.md          ← English one-pager for non-technical stakeholders
+├── ROADMAP.md                ← priorities + open questions for NUS AI Know team
+├── BUILD_LOG.md              ← journal of what was built + 15 documented pitfalls
+├── demo_questions.md         ← curated Q&A + 4-minute live-demo recipe
+├── start_demo.cmd            ← Windows double-click launcher (calls start_all.sh)
 ├── stop_demo.cmd
+├── agent/                    ← canonical code installed into ADH at runtime
+│   ├── README.md             ← step-by-step install instructions
+│   ├── nus_agent.py          ← the AI agent (history + RAG + reset)
+│   ├── whisperASR.py         ← Groq Whisper engine for ADH
+│   └── whisperAPI.yaml       ← ADH config for the Whisper engine
 └── scripts/                  ← bash helpers (run inside WSL)
-    ├── start_all.sh          ← bring up backend + frontend
+    ├── start_all.sh          ← bring up backend + frontend (requires env tokens)
     ├── stop_all.sh
     ├── health.sh             ← quick reachability + agent smoke test
     ├── build_rag_index.py    ← scrape NUS pages → embed → save .npz

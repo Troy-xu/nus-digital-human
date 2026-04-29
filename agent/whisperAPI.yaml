@@ -1,0 +1,43 @@
+NAME: "Whisper"
+VERSION: "v0.0.1"
+DESC: "OpenAI-compatible Whisper transcription (Groq/OpenAI/Azure)"
+META: {
+  official: "https://console.groq.com/docs/speech-text",
+  configuration: "Set GROQ_API_KEY env var on the backend; or paste api_key here.",
+  tips: "Multilingual (EN/ZH/etc) with auto language detection. Defaults to Groq's free whisper-large-v3.",
+  fee: "free (Groq) / $0.006 per min (OpenAI)"
+}
+PARAMETERS: [
+  {
+    name: "api_key",
+    description: "Bearer token. Leave empty to read GROQ_API_KEY env var on the backend.",
+    type: "string",
+    required: false,
+    choices: [],
+    default: ""
+  },
+  {
+    name: "base_url",
+    description: "OpenAI-compatible base URL (no trailing slash, no /audio/...).",
+    type: "string",
+    required: false,
+    choices: [],
+    default: "https://api.groq.com/openai/v1"
+  },
+  {
+    name: "model",
+    description: "Whisper model id.",
+    type: "string",
+    required: false,
+    choices: [],
+    default: "whisper-large-v3"
+  },
+  {
+    name: "language",
+    description: "Optional language hint (e.g. 'en', 'zh'). Empty = auto-detect.",
+    type: "string",
+    required: false,
+    choices: [],
+    default: ""
+  }
+]
