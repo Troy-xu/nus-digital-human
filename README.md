@@ -4,6 +4,7 @@ A voice-first 2D real-time digital human that role-plays as an NUS (National Uni
 
 Built on top of [李锟's ADH fork](https://github.com/freecoinx/awesome-digital-human-live2d), with the AI Agent / RAG / ASR layers swapped for a free-tier Microsoft + Groq stack.
 
+> **Looking for the non-technical pitch?** See [PRODUCT_BRIEF.md](PRODUCT_BRIEF.md) — one-page overview suitable for sharing with stakeholders.
 > Full build journal, including pitfalls and rationale, lives in [BUILD_LOG.md](BUILD_LOG.md).
 
 ## Where this is heading
