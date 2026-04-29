@@ -6,6 +6,12 @@ local_*.sh
 secrets/
 **/credentials.json
 
+# Local-only notes for the project owner (private cheat sheets, etc.)
+NEXT_SESSION_NOTES.md
+NOTES.md
+notes/
+*.private.md
+
 # Logs
 *.log
 logs/
