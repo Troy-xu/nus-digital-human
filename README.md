@@ -16,6 +16,8 @@ This repo today is a working proof-of-concept; the longer-term direction is:
 
 If you've seen better frameworks for this (e.g. live2d alternatives, end-to-end voice agents like [Pipecat](https://github.com/pipecat-ai/pipecat), [Vapi](https://vapi.ai), etc.), please open an issue — we're not married to ADH.
 
+> Full roadmap with priorities and open questions: [ROADMAP.md](ROADMAP.md).
+
 ---
 
 ## What you get
