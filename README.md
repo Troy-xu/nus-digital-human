@@ -2,9 +2,19 @@
 
 A voice-first 2D real-time digital human that role-plays as an NUS (National University of Singapore) campus assistant. Ask about Computing programmes, faculties, campus locations — in **English or 中文** — and the digital human answers in voice with mouth-sync, grounded in scraped NUS Computing pages via RAG.
 
-Built as a demo on top of [李锟's ADH fork](https://github.com/freecoinx/awesome-digital-human-live2d), with the AI Agent / RAG / ASR layers swapped for a free-tier Microsoft + Groq stack.
+Built on top of [李锟's ADH fork](https://github.com/freecoinx/awesome-digital-human-live2d), with the AI Agent / RAG / ASR layers swapped for a free-tier Microsoft + Groq stack.
 
 > Full build journal, including pitfalls and rationale, lives in [BUILD_LOG.md](BUILD_LOG.md).
+
+## Where this is heading
+
+This repo today is a working proof-of-concept; the longer-term direction is:
+
+- **Kiosk deployment** — a touchscreen in NUS lobbies / open-house / library, not a personal browser tab. That implies session timeouts, privacy-by-default logging, wake-word / tap-to-start UX, and audio tuning for noisy spaces.
+- **Backed by NUS AI Know** — the current self-scraped RAG (`comp.nus.edu.sg`, 24 chunks) and GitHub Models gpt-4o-mini are stopgaps. Plan is to swap both for NUS's internal AI Know RAG + chat API once integration is approved. The OutsideAgent contract is the only seam that needs to change.
+- **Smarter agent loop** — currently a one-shot retrieve-then-answer. Ideas on the table: tool-using agent (web search, NUS calendar, bus times), conversation memory beyond raw turns, persona-aware Live2D customization for NUS branding.
+
+If you've seen better frameworks for this (e.g. live2d alternatives, end-to-end voice agents like [Pipecat](https://github.com/pipecat-ai/pipecat), [Vapi](https://vapi.ai), etc.), please open an issue — we're not married to ADH.
 
 ---
 
@@ -132,6 +142,17 @@ nus-digital-human/
 - "Speak end → first audio" latency is 3–5s on free tiers. See [BUILD_LOG.md](BUILD_LOG.md#十性能数据参考) for breakdown.
 
 ---
+
+## Contributing
+
+PRs and issues welcome. Especially looking for help on:
+
+- **Better speech / agent frameworks** — if you've used something that beats ADH + GitHub Models for kiosk-style voice agents, propose it. We're open to a rewrite if the gain is real.
+- **Live2D model for NUS persona** — current default is the stock Hiyori character. Need a designer who can produce a Live2D model that fits NUS branding (Lion / staff / student persona).
+- **Knowledge base coverage** — the RAG only covers `comp.nus.edu.sg` because `nus.edu.sg` main pages are JS-rendered. A Patchright/Playwright-based scraper (or first-class NUS AI Know integration) would broaden this.
+- **Kiosk-form-factor UX** — wake-word detection, idle-timeout reset, error-state UI, telemetry.
+
+Before opening a non-trivial PR, please skim [BUILD_LOG.md](BUILD_LOG.md) — it documents the 15 sharp edges we've already hit, plus the rationale for the current stack. Don't reintroduce solved problems.
 
 ## Credits
 
