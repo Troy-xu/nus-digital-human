@@ -4,6 +4,16 @@ NUS Campus Assistant agent for ADH OutsideAgent.
 Contract (from awesome-digital-human-live2d/digitalHuman/agent/core/outsideAgent.py):
     - module exposes `chat_with_agent(user_msg: str)`
     - it must be an async generator yielding ('TEXT', str) tuples
+
+LLM provider selection via env var LLM_PROVIDER:
+    - "groq"    -> llama-3.3-70b-versatile via api.groq.com (default; fastest, free)
+    - "github"  -> gpt-4o-mini via models.inference.ai.azure.com (free)
+    - "openai"  -> gpt-4o via api.openai.com (paid, future option)
+
+Per-provider env overrides also supported:
+    - LLM_BASE_URL / LLM_MODEL_ID let you pin specific values.
+    - Embeddings ALWAYS via GitHub Models (uses GITHUB_TOKEN). RAG retrieval
+      quality stays constant regardless of which LLM you chose.
 """
 import os
 from pathlib import Path
@@ -11,28 +21,71 @@ from pathlib import Path
 import numpy as np
 from openai import AsyncOpenAI
 
-# GitHub Models endpoint (OpenAI-compatible). See https://github.com/marketplace/models
-BASE_URL = os.environ.get("LLM_BASE_URL", "https://models.inference.ai.azure.com")
-API_KEY = os.environ.get("GITHUB_TOKEN") or os.environ.get("EXAMPLE_API_KEY", "")
-MODEL_ID = os.environ.get("LLM_MODEL_ID", "gpt-4o-mini")
-EMBED_MODEL = os.environ.get("EMBED_MODEL_ID", "text-embedding-3-small")
 
-# RAG index built by scripts/build_rag_index.py. Loaded once at module import.
+# ---------- LLM provider dispatch ----------------------------------------
+
+PROVIDERS = {
+    "groq": {
+        "base_url": "https://api.groq.com/openai/v1",
+        "api_key_env": "GROQ_API_KEY",
+        "default_model": "llama-3.3-70b-versatile",
+    },
+    "github": {
+        "base_url": "https://models.inference.ai.azure.com",
+        "api_key_env": "GITHUB_TOKEN",
+        "default_model": "gpt-4o-mini",
+    },
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "api_key_env": "OPENAI_API_KEY",
+        "default_model": "gpt-4o",
+    },
+}
+
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "groq").lower()
+_cfg = PROVIDERS.get(LLM_PROVIDER, PROVIDERS["groq"])
+
+LLM_API_KEY = os.environ.get(_cfg["api_key_env"], "")
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", _cfg["base_url"])
+MODEL_ID = os.environ.get("LLM_MODEL_ID", _cfg["default_model"])
+
+_llm_client = AsyncOpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
+print(f"[NUS Agent] LLM: provider={LLM_PROVIDER} model={MODEL_ID} base={LLM_BASE_URL}")
+
+
+# ---------- Embeddings (always GitHub Models, for free + consistent RAG) ----
+
+EMBED_API_KEY = os.environ.get("GITHUB_TOKEN", "")
+EMBED_BASE_URL = "https://models.inference.ai.azure.com"
+EMBED_MODEL = os.environ.get("EMBED_MODEL_ID", "text-embedding-3-small")
+_embed_client = AsyncOpenAI(api_key=EMBED_API_KEY, base_url=EMBED_BASE_URL)
+
+
+# ---------- RAG index loading -------------------------------------------
+
 _RAG_PATH = Path(__file__).resolve().parent.parent / "data" / "nus_rag.npz"
+USE_RAG = os.environ.get("USE_RAG", "true").lower() in {"1", "true", "yes", "on"}
+
 try:
     _rag = np.load(_RAG_PATH, allow_pickle=True)
     _rag_embeddings: np.ndarray | None = _rag["embeddings"]
     _rag_chunks: list[str] = _rag["chunks"].tolist()
     _rag_sources: list[str] = _rag["sources"].tolist()
-    print(f"[NUS Agent] RAG loaded: {len(_rag_chunks)} chunks from {_RAG_PATH}")
+    print(f"[NUS Agent] RAG loaded: {len(_rag_chunks)} chunks (USE_RAG={USE_RAG})")
 except Exception as _rag_err:
     _rag_embeddings = None
     _rag_chunks = []
     _rag_sources = []
     print(f"[NUS Agent] RAG NOT loaded ({_rag_err}); continuing without retrieval.")
 
+
+# ---------- System prompt -----------------------------------------------
+
 # This prompt is tuned for a SPOKEN demo where TTS plays alongside the streamed
-# text. Short answers keep the subtitle/audio gap small.
+# text. Short answers keep the subtitle/audio gap small. The "honesty" block
+# uses a HEDGE-rather-than-REFUSE policy: if the agent has a plausible answer
+# for a person/date/fact, it shares it with a verify note instead of declining
+# entirely. Refuses outright only for numerical fees/dates it doesn't know.
 SYSTEM_PROMPT = """\
 You are an NUS (National University of Singapore) campus assistant. You speak
 out loud through a digital human, so your answers must sound like natural speech.
@@ -43,19 +96,29 @@ Hard rules:
 - No "Sure!", "Great question!", or other filler openers.
 - Reply in the language the user uses (English or 中文).
 
-Content rules:
-- For Admissions, Faculties, Campus life, IT services, food courts, hostels,
-  CourseReg, Student Card, registrar — answer briefly with what you know.
-- If you do NOT know an NUS-specific fact (fees, dates, current dean, room
-  numbers), say "I'm not sure, please check nus.edu.sg" — do not invent.
-- Reasonable defaults: NUS Computing is at Kent Ridge (COM1/COM2/COM3);
-  NUS has Kent Ridge, Bukit Timah, and Outram campuses.
+Honesty / accuracy:
+- For things you DO know confidently (campus locations, programme names,
+  faculty descriptions, well-established facts): share directly.
+- For things that change over time (current Dean, current fees, current
+  deadlines, room assignments, course offerings each semester): if you have
+  a plausible answer, share it AND add a brief verify note such as
+  "please verify on nus.edu.sg" or "as of my last info".
+- For specific numbers you don't actually recall (exact fee amounts,
+  exact dates, room numbers): say "I'm not sure, please check nus.edu.sg".
+  Never invent numerical values.
+- Treat retrieved RAG context as supporting material, not as authoritative
+  for time-sensitive facts. Cross-check against your own knowledge before
+  asserting names or dates.
+
+Reasonable defaults:
+- NUS Computing is at Kent Ridge campus (COM1/COM2/COM3 buildings).
+- NUS has Kent Ridge, Bukit Timah, and Outram campuses.
 
 Tone: warm and helpful, like a senior student in conversation.
 """
 
 
-_client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL)
+# ---------- Conversation history ----------------------------------------
 
 # Single-user demo conversation history. Cleared on backend restart, or when
 # the user says "reset"/"clear"/"重置"/"清空".
@@ -70,14 +133,16 @@ def _is_reset_command(msg: str) -> bool:
                  "重置", "清空", "清空对话", "重新开始"}
 
 
+# ---------- RAG retrieval ------------------------------------------------
+
 async def _retrieve(query: str, k: int = 3) -> list[str]:
     """Retrieve top-k most relevant NUS knowledge chunks via cosine similarity."""
-    if _rag_embeddings is None or len(_rag_chunks) == 0:
+    if not USE_RAG or _rag_embeddings is None or len(_rag_chunks) == 0:
         return []
     import time
     t0 = time.perf_counter()
     try:
-        resp = await _client.embeddings.create(model=EMBED_MODEL, input=[query])
+        resp = await _embed_client.embeddings.create(model=EMBED_MODEL, input=[query])
         q = np.asarray(resp.data[0].embedding, dtype=np.float32)
         q /= np.linalg.norm(q) + 1e-12
         sims = _rag_embeddings @ q
@@ -93,12 +158,15 @@ async def _retrieve(query: str, k: int = 3) -> list[str]:
         return []
 
 
+# ---------- Main entry point --------------------------------------------
+
 async def chat_with_agent(user_msg: str):
     """Async generator yielding ('TEXT', str) chunks for ADH OutsideAgent."""
     global _history
 
-    if not API_KEY:
-        yield ('TEXT', "[NUS Agent] Missing GITHUB_TOKEN env var on the server.")
+    if not LLM_API_KEY:
+        env_name = _cfg["api_key_env"]
+        yield ('TEXT', f"[NUS Agent] Missing {env_name} env var on the server.")
         return
 
     if _is_reset_command(user_msg):
@@ -125,9 +193,11 @@ async def chat_with_agent(user_msg: str):
         messages.append({
             "role": "system",
             "content": (
-                "Relevant NUS knowledge retrieved for this turn. Ground your "
-                "answer in this material when it applies; do not contradict it. "
-                "If the material does not cover the question, say so honestly.\n\n"
+                "Relevant NUS knowledge retrieved for this turn. Use it to "
+                "ground factual claims about programmes, campus, and "
+                "descriptions. For person names, dates, fees, or details that "
+                "may be outdated, cross-check against your own knowledge and "
+                "hedge appropriately.\n\n"
                 f"{rag_block}"
             ),
         })
@@ -135,11 +205,11 @@ async def chat_with_agent(user_msg: str):
 
     full_response = ""
     try:
-        stream = await _client.chat.completions.create(
+        stream = await _llm_client.chat.completions.create(
             model=MODEL_ID,
             messages=messages,
             temperature=0.4,
-            max_tokens=80,
+            max_tokens=120,  # bumped from 80 to leave room for hedge phrases
             stream=True,
         )
 
@@ -158,4 +228,4 @@ async def chat_with_agent(user_msg: str):
         # Roll back the user turn so a transient LLM error doesn't poison history.
         if _history and _history[-1].get("role") == "user":
             _history.pop()
-        yield ('TEXT', f"[NUS Agent] LLM error: {e}")
+        yield ('TEXT', f"[NUS Agent] LLM error ({type(e).__name__}): {e}")

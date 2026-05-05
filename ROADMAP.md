@@ -94,6 +94,8 @@ The big strategic swap. Today we self-host a 24-chunk RAG + call GitHub Models. 
 
 ### 9. Tool-use / function-calling agent (1 week)
 
+**Status update (2026-04-30): foundation in place.** `nus_agent.py` now has `LLM_PROVIDER` env-var dispatch (groq | github | openai), so swapping models for the agentic experiment is one env flag. Default LLM is now Groq Llama-3.3-70B (3-4× faster than gpt-4o-mini, comparable quality, supports function calling). System prompt is hedge-style — agent gives plausible info with "verify on nus.edu.sg" caveat instead of refusing outright. **Next step: actually wire up function calling and add the first real tool** (e.g. `find_building(name)` returning coordinates + map URL).
+
 Move from one-shot RAG-then-answer to a true agent that decides when to:
 
 - Search NUS AI Know vs use cached knowledge

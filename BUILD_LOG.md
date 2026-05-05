@@ -163,6 +163,52 @@ WSL2 Ubuntu-22.04 (root @ /root/work/)
 **应做**：测完立刻 revoke，生成新的本地保管。
 **教训**：永远不要把 secret 贴聊天里 — Claude 看到的，磁盘日志也存了。
 
+### 16. WSL2 `/init` 跨 wsl 调用缓存 env
+**现象**：PowerShell rotate token + 设新 env，新 PowerShell process 见到新 env，但每个 `wsl ...` 调用启动的 backend python 拿到的还是**旧** token。
+**根本原因**：WSL2 有一个长寿的 `/init` 进程（pid 1 in WSL）。它在 VM **第一次** wsl 调用时捕获 PowerShell 的 env。之后所有 `wsl` 调用进的都是 **同一个 /init 的子 shell**，env 来自 /init 的快照，不是从 PowerShell 重新读。
+**解法**：`wsl --shutdown` 强制重建 /init，下一次 wsl 调用才会从最新 PowerShell 重新捕获 env。
+**教训**：WSL2 不是"每次 wsl 调用都新启 VM"，是"VM 持久 + 多 shell 共享 /init"。token rotate 后必须 shutdown 才能生效。
+
+### 17. start_all.sh 加的 `/root/.nus-tokens` source 静默覆盖 PowerShell env
+**现象**：所有上层 env 路径（Windows User env, WSLENV, PowerShell `$env:`）都验证有新 token，但 backend 还是 401。
+**根本原因**：用户为了让 `start_demo.cmd` 双击启动也能拿 token，在 start_all.sh 早期加了：
+```bash
+if [ -f /root/.nus-tokens ]; then . /root/.nus-tokens; fi
+```
+这段在 `${VAR:?}` 检查**之前**执行，`/root/.nus-tokens` 里的 export 直接覆盖了任何上层传入的值。文件本身是手动维护的，token rotate 时如果只更新 PowerShell env 而忘了同步这个文件 → 旧 token 永远活着。
+**解法**：rotate token 时同步更新 PowerShell User env + `/root/.nus-tokens` 两处。`NEXT_SESSION_NOTES.md` 里有完整的 PowerShell oneliner。
+**教训**：file-based env 兜底是好设计（让多种启动路径都能工作），但**必须在文档里明确写出"rotation 要更新两处"**。否则未来的自己一定会再踩。
+
+---
+
+## 2026-04-30 大幅迭代：Groq Llama + hedge prompt
+
+继首批 demo 跑通后，做了三件大改动：
+
+**1. LLM 默认换成 Groq Llama-3.3-70B**（之前 GitHub Models gpt-4o-mini）。
+- 速度从 ~1.5s 降到 ~0.5s 第一字（**~3-4× 快**）
+- 质量基本相当（gpt-4o 在某些题略好但不显著）
+- 同 Groq 账号已经在跑 Whisper，不用注册新服务
+- 通过 `LLM_PROVIDER` env var 可切回 GitHub Models 或升级到付费 OpenAI gpt-4o
+- 实现：[`agent/nus_agent.py`](agent/nus_agent.py) 顶部的 `PROVIDERS` 字典 + dispatch
+
+**2. System prompt 从 refuse-style 改成 hedge-style**。
+- 之前："Who is the Dean?" → "I'm not sure, please check nus.edu.sg"（信息为零）
+- 现在："Who is the Dean?" → "Professor Tulika Mitra, as of my last info, please verify on nus.edu.sg"（给名字 + 自我免责）
+- **数字类信息**（fees, dates）依然 refuse，避免编造数值
+- 用户明确偏好 hedge 而非 refuse（"我觉得给名字 OK"）
+
+**3. Whisper ASR 加语言白名单**（agent/whisperASR.py）。
+- 用 `verbose_json` 让 Whisper 返回 detected language
+- 如果不在 `{english, chinese, mandarin}` 白名单 → retry with `language=en`
+- 修了"英语被识别成 Malay"的痼疾（新加坡口音 + Whisper auto-detect 偶尔搞混）
+- 正常情况零开销，只 mis-detect 时多一次调用
+
+附加：6-way 模型对比 ([`scripts/abcd_comparison.py`](scripts/abcd_comparison.py))，跑 4o-mini / 4o / Llama-70B / Cohere R+ × RAG on/off 共 6 种组合 × 7 题。完整结果在 commit message。结论：
+- 强模型（4o, Llama-70B）+ no RAG 在 4-5 题上和有 RAG 一样好
+- RAG 真正值钱的场景是**官方 phrasing**（vision / mission / 政策原句）
+- guard rail 题（fees, dean）：no-RAG 反而更安全（不会被 RAG 里的过期 fragment 误导）— 后来 hedge prompt 让 RAG + 强模型也能稳定 hedge
+
 ---
 
 ## 五、未做 / 已知限制

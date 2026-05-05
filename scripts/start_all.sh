@@ -8,6 +8,15 @@
 set -u
 export PATH=/root/.local/bin:$PATH
 
+# Load tokens from /root/.nus-tokens if present. This lets start_demo.cmd
+# (which pipes this script into a fresh `wsl bash` with no inherited env)
+# pick up GITHUB_TOKEN / GROQ_API_KEY without baking them into git.
+# File should contain:  export GITHUB_TOKEN=ghp_...   and   export GROQ_API_KEY=gsk_...
+if [ -f /root/.nus-tokens ]; then
+    # shellcheck disable=SC1091
+    . /root/.nus-tokens
+fi
+
 # Token for the NUS agent (read by adh_ai_agent.nus_agent at LLM call time).
 # Get one at: https://github.com/settings/tokens (fine-grained, scope=Models: Read).
 : "${GITHUB_TOKEN:?Set GITHUB_TOKEN env var or edit this line with your GitHub PAT}"
