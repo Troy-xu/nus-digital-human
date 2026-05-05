@@ -39,6 +39,18 @@ __all__ = ["WhisperApiAsr"]
 ALLOWED_LANGS = {"english", "chinese", "mandarin", "en", "zh"}
 FALLBACK_LANG = "en"
 
+# Whisper "prompt" parameter biases recognition toward in-domain vocabulary.
+# Up to 224 tokens; we use it to keep "NUS" from getting transcribed as "US",
+# "COM1" from becoming "common one" / "command", etc. The prompt should sound
+# like the kind of speech the user is about to produce.
+WHISPER_PROMPT = (
+    "Conversation about NUS, the National University of Singapore. "
+    "Speakers mention NUS Computing, NUS School of Computing, Kent Ridge campus, "
+    "Bukit Timah, COM1, COM2, COM3, Computer Science, Information Systems, "
+    "Computer Engineering, Business Analytics, Information Security, "
+    "Provost, Dean, Faculty, CourseReg, NUSnet, Yusof Ishak House, UTown."
+)
+
 
 @ASREngines.register("Whisper")
 class WhisperApiAsr(BaseASREngine):
@@ -77,6 +89,10 @@ class WhisperApiAsr(BaseASREngine):
                 "model": model,
                 # verbose_json gives us the detected language so we can allowlist-check it.
                 "response_format": "verbose_json",
+                # Bias toward NUS-domain vocabulary so "NUS" doesn't get
+                # transcribed as "US", etc. Note: Whisper's prompt is most
+                # effective when its language matches the audio language.
+                "prompt": WHISPER_PROMPT,
             }
             if force_lang:
                 data["language"] = force_lang

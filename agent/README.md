@@ -7,14 +7,24 @@ the ADH project tree.
 
 ## Files
 
-| File | Where it goes at runtime |
-|---|---|
-| `nus_agent.py` | `<adh_ai_agent project>/adh_ai_agent/nus_agent.py` |
-| `whisperASR.py` | `<ADH backend>/digitalHuman/engine/asr/whisperASR.py` |
-| `whisperAPI.yaml` | `<ADH backend>/configs/engines/asr/whisperAPI.yaml` |
+| File | Where it goes at runtime | Note |
+|---|---|---|
+| `nus_agent.py` | `<adh_ai_agent>/adh_ai_agent/nus_agent.py` | new file |
+| `whisperASR.py` | `<ADH backend>/digitalHuman/engine/asr/whisperASR.py` | new file |
+| `whisperAPI.yaml` | `<ADH backend>/configs/engines/asr/whisperAPI.yaml` | new file |
+| `edgeAPI.yaml` | `<ADH backend>/configs/engines/tts/edgeAPI.yaml` | **overwrites** ADH's bundled file (only difference: default voice changed from `zh-CN-XiaoxiaoNeural` to `en-US-AvaMultilingualNeural` so the digital human can speak both English and Chinese without manual voice switching) |
 
 `<ADH backend>` is wherever you cloned `awesome-digital-human-live2d`, e.g. `/root/work/awesome-digital-human-live2d/`.
-`<adh_ai_agent project>` is the sibling Python project we install editable into the ADH backend's venv, e.g. `/root/work/adh_ai_agent/`.
+`<adh_ai_agent>` is the sibling Python project we install editable into the ADH backend's venv, e.g. `/root/work/adh_ai_agent/`.
+
+In addition, two ADH-project files need small in-place patches that aren't shipped here:
+
+- `<ADH backend>/web/lib/constants.ts` — `SENTIO_CHATMODE_DEFULT` set to `IMMSERSIVE` (immersive mode by default).
+- `<ADH backend>/web/app/(products)/sentio/components/chatbot/input.tsx` — VAD config in `ChatVadInput`: stricter thresholds + echo cancellation (see `../scripts/patch_vad.sh` and `../scripts/patch_vad_types.sh`).
+- `<ADH backend>/configs/agents/outsideAgent.yaml` — `agent_type` set `required: false`, `agent_module` default set to `adh_ai_agent.nus_agent`.
+- `<ADH backend>/configs/config.yaml` — agent SUPPORT_LIST + DEFAULT include `outsideAgent.yaml`; ASR SUPPORT_LIST + DEFAULT set to `whisperAPI.yaml`.
+
+These patches are documented step-by-step in `../BUILD_LOG.md`.
 
 ## Manual installation (one-time)
 
